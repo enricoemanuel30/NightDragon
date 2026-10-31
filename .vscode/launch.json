@@ -1,0 +1,11 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "java",
+            "name": "Executar Thanatos Beat 'Em Up",
+            "request": "launch",
+            "mainClass": "main.ThanatosBeatEmUp"
+        }
+    ]
+}
