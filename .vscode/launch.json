@@ -5,7 +5,8 @@
             "type": "java",
             "name": "Executar Thanatos Beat 'Em Up",
             "request": "launch",
-            "mainClass": "main.ThanatosBeatEmUp"
+            "mainClass": "main.ThanatosBeatEmUp",
+            "projectName": "JOGO(BACKEND)"
         }
     ]
 }

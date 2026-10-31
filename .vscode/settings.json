@@ -1,6 +1,6 @@
 {
     "java.project.sourcePaths": [
-        ".vscode/src"
+        "src"
     ],
-    "java.project.outputPath": ".vscode/bin"
+    "java.project.outputPath": "bin"
 }
