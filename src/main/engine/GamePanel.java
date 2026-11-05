@@ -19,7 +19,7 @@ import javax.swing.*;
 import Entities.*;
 
 /**
- * ============================================================================
+ * ==''==========================================================================
  * MOTOR PRINCIPAL DO JOGO: GAMEPANEL (GAME LOOP, FÍSICA E RENDERIZAÇÃO)
  * ============================================================================
  * Herda de JPanel (para ser o painel onde a tela é desenhada) e
@@ -36,12 +36,12 @@ import Entities.*;
 public class GamePanel extends JPanel implements Runnable {
 
     // ------------------------------------------------------------------------
-    // CONSTANTES DA ARENA DE JOGO (ESPAÇO 2.5D)
+    // CONSTANTES DA ARENA DE JOGO (ESPAÇO 2.5D NO SALOON)
     // ------------------------------------------------------------------------
-    public static final int WIDTH = 900;       // Largura total da tela em pixels
-    public static final int HEIGHT = 500;      // Altura total da tela em pixels
-    public static final int GROUND_MIN_Y = 220; // Limite superior da pista de caminhada (horizonte do chão)
-    public static final int GROUND_MAX_Y = 440; // Limite inferior da pista de caminhada (frente da tela)
+    public static final int WIDTH = 900;        // Largura total da tela em pixels
+    public static final int HEIGHT = 500;       // Altura total da tela em pixels
+    public static final int GROUND_MIN_Y = 310; // Limite superior da pista caminhável (abaixo do balcão e mesas do fundo)
+    public static final int GROUND_MAX_Y = 475; // Limite inferior da pista caminhável (frente da tela)
 
     // ------------------------------------------------------------------------
     // CONTROLE DO GAME LOOP E THREAD (TARGET 60 FPS)
@@ -118,7 +118,7 @@ public class GamePanel extends JPanel implements Runnable {
      * Recria o jogador, limpa as listas de inimigos e projetais e carrega a onda 1.
      */
     private void initGame() {
-        player = new Player(100, 320); // Spawna Thanatos do lado esquerdo da pista
+        player = new Player(120, 390); // Spawna Thanatos do lado esquerdo do Saloon
         enemies = new ArrayList<>();
         projectiles = new ArrayList<>();
         floatingTexts = new ArrayList<>();
@@ -140,23 +140,23 @@ public class GamePanel extends JPanel implements Runnable {
         enemies.clear();     // Remove qualquer inimigo remanescente
         projectiles.clear(); // Remove projéteis da onda anterior
         
-        // Onda 1: Apresentação básica de combate (1 Pistoleiro e 1 Ceifador)
+        // Onda 1: Apresentação básica de combate (1 Pistoleiro e 1 Ceifador no piso do Saloon)
         if (wave == 1) {
-            enemies.add(new PistoleiroEnemy(650, 260));
-            enemies.add(new CeifadorEnemy(750, 340));
+            enemies.add(new PistoleiroEnemy(650, 350));
+            enemies.add(new CeifadorEnemy(750, 420));
         } 
         // Onda 2: Aumento da pressão com introdução do Brutamontes Tanque
         else if (wave == 2) {
-            enemies.add(new PistoleiroEnemy(700, 240));
-            enemies.add(new BrutamontesEnemy(750, 320));
-            enemies.add(new CeifadorEnemy(800, 400));
+            enemies.add(new PistoleiroEnemy(700, 340));
+            enemies.add(new BrutamontesEnemy(750, 390));
+            enemies.add(new CeifadorEnemy(800, 450));
         } 
         // Onda 3: Desafio Final / Boss Wave com 4 inimigos combinados
         else if (wave >= 3) {
-            enemies.add(new BrutamontesEnemy(650, 250));
-            enemies.add(new PistoleiroEnemy(750, 350));
-            enemies.add(new CeifadorEnemy(800, 300));
-            enemies.add(new BrutamontesEnemy(850, 420));
+            enemies.add(new BrutamontesEnemy(650, 350));
+            enemies.add(new PistoleiroEnemy(750, 410));
+            enemies.add(new CeifadorEnemy(800, 360));
+            enemies.add(new BrutamontesEnemy(850, 450));
         }
     }
 
@@ -334,10 +334,19 @@ public class GamePanel extends JPanel implements Runnable {
                 if (player.getAttackBounds().intersects(enemy.getBounds())) {
                     int dmg = player.getAttackDamage();
                     enemy.takeDamage(dmg);       // Aplica dano ao inimigo
-                    player.addFuria(10);          // Cada acerto com sucesso premia +10 de Fúria
                     
-                    // Exibe o número de dano infligido em laranja
-                    floatingTexts.add(new FloatingText("-" + dmg, enemy.getX(), enemy.getY() - 15, Color.ORANGE));
+                    if (player.isFuriaActive()) {
+                        // MECÂNICA DE LIFESTEAL: Cura HP a cada golpe bem-sucedido na Fúria
+                        int healAmount = 8;
+                        player.heal(healAmount);
+                        floatingTexts.add(new FloatingText("+" + healAmount + " HP", player.getX() - 10, player.getY() - 40, Color.GREEN));
+                    } else {
+                        player.addFuria(10);     // Fora da fúria, cada acerto premia +10 de Fúria
+                    }
+                    
+                    // Exibe o número de dano infligido (Vermelho flamejante no Rage Mode, Laranja no normal)
+                    Color dmgColor = player.isFuriaActive() ? new Color(255, 60, 60) : Color.ORANGE;
+                    floatingTexts.add(new FloatingText("-" + dmg, enemy.getX(), enemy.getY() - 15, dmgColor));
                 }
             }
         }
@@ -510,7 +519,7 @@ public class GamePanel extends JPanel implements Runnable {
 
     /**
      * Renderiza o Heads-Up Display (HUD):
-     * - Painel com nome do herói, barra de HP e barra de Fúria do Dragão
+     * - Painel com retrato de Thanatos, barra de HP e o Charuto de Fúria
      * - Painel superior direito com contador de ondas e contagem de inimigos
      * - Guia de comandos no rodapé da janela
      */
@@ -518,58 +527,94 @@ public class GamePanel extends JPanel implements Runnable {
         // --------------------------------------------------------------------
         // Painel do Jogador (Canto Superior Esquerdo)
         // --------------------------------------------------------------------
+        int panelX = 15;
+        int panelY = 15;
+        int panelW = 390;
+        int panelH = 88;
+
         // Placa de fundo translúcida com cantos arredondados
-        g2.setColor(new Color(10, 10, 20, 220));
-        g2.fillRoundRect(15, 15, 340, 80, 15, 15);
+        g2.setColor(new Color(10, 10, 20, 230));
+        g2.fillRoundRect(panelX, panelY, panelW, panelH, 15, 15);
         
-        // Borda dourada em estilo Velho Oeste tecnológico
-        g2.setColor(new Color(180, 140, 60));
-        g2.drawRoundRect(15, 15, 340, 80, 15, 15);
+        // Borda dourada (ou avermelhada ardente no Modo Fúria)
+        if (player.isFuriaActive()) {
+            g2.setColor(new Color(255, 60, 40));
+        } else {
+            g2.setColor(new Color(180, 140, 60));
+        }
+        g2.drawRoundRect(panelX, panelY, panelW, panelH, 15, 15);
+
+        // Retrato do Thanatos se disponível
+        BufferedImage portrait = player.getRagePortrait();
+        int contentOffsetX = 25;
+        if (portrait != null) {
+            // Desenha miniatura do rosto do Thanatos no HUD
+            int portSize = 58;
+            int portX = panelX + 12;
+            int portY = panelY + 15;
+
+            // Fundo escuro do avatar com borda
+            g2.setColor(new Color(25, 15, 20));
+            g2.fillRoundRect(portX - 2, portY - 2, portSize + 4, portSize + 4, 8, 8);
+            g2.drawImage(portrait, portX, portY, portSize, portSize, null);
+
+            g2.setColor(player.isFuriaActive() ? new Color(255, 60, 40) : new Color(150, 110, 50));
+            g2.drawRoundRect(portX - 2, portY - 2, portSize + 4, portSize + 4, 8, 8);
+
+            contentOffsetX = portX + portSize + 15;
+        }
 
         // Nome de Thanatos Colt
-        g2.setFont(new Font("SansSerif", Font.BOLD, 14));
-        g2.setColor(Color.WHITE);
-        g2.drawString("THANATOS COLT", 25, 35);
+        g2.setFont(new Font("SansSerif", Font.BOLD, 13));
+        if (player.isFuriaActive()) {
+            g2.setColor(new Color(255, 100, 80));
+            g2.drawString("THANATOS COLT [MODO BRUTO]", contentOffsetX, panelY + 22);
+        } else {
+            g2.setColor(Color.WHITE);
+            g2.drawString("THANATOS COLT", contentOffsetX, panelY + 22);
+        }
 
         // Barra de Vida (HP)
-        g2.setFont(new Font("SansSerif", Font.PLAIN, 10));
-        g2.drawString("HP:", 25, 53);
+        g2.setFont(new Font("SansSerif", Font.BOLD, 10));
+        g2.setColor(Color.LIGHT_GRAY);
+        g2.drawString("HP:", contentOffsetX, panelY + 41);
         
+        int barW = 200;
+        int barH = 11;
+        int barX = contentOffsetX + 28;
+        int hpY = panelY + 32;
+
         // Fundo cinza da barra de HP
-        g2.setColor(new Color(50, 50, 50));
-        g2.fillRect(50, 43, 200, 12);
+        g2.setColor(new Color(40, 40, 45));
+        g2.fillRect(barX, hpY, barW, barH);
         
         // Preenchimento vermelho proporcional à vida do jogador
-        int hpWidth = (int) ((player.getHp() / (double) player.getMaxHp()) * 200);
-        g2.setColor(new Color(220, 40, 40));
-        g2.fillRect(50, 43, hpWidth, 12);
+        int hpWidth = (int) ((player.getHp() / (double) player.getMaxHp()) * barW);
+        g2.setColor(player.isFuriaActive() ? new Color(255, 50, 50) : new Color(220, 40, 40));
+        g2.fillRect(barX, hpY, hpWidth, barH);
         
-        // Contorno branco da barra de HP
-        g2.setColor(Color.WHITE);
-        g2.drawRect(50, 43, 200, 12);
+        // Contorno da barra de HP
+        g2.setColor(new Color(200, 200, 200));
+        g2.drawRect(barX, hpY, barW, barH);
 
-        // Barra de FÚRIA DO DRAGÃO
-        g2.drawString("FÚRIA:", 25, 73);
-        
-        // Fundo cinza da barra de Fúria
-        g2.setColor(new Color(50, 50, 50));
-        g2.fillRect(50, 63, 200, 12);
-        
-        // Preenchimento da barra de Fúria (alaranjado durante carregamento, dourado quando pronta)
-        int furiaWidth = (int) ((player.getFuria() / 100.0) * 200);
-        g2.setColor(player.isFuriaPronta() ? new Color(255, 200, 0) : new Color(255, 120, 0));
-        g2.fillRect(50, 63, furiaWidth, 12);
-        
-        // Contorno da barra de fúria
+        // Texto numérico de HP
+        g2.setFont(new Font("SansSerif", Font.PLAIN, 9));
         g2.setColor(Color.WHITE);
-        g2.drawRect(50, 63, 200, 12);
+        g2.drawString(player.getHp() + " / " + player.getMaxHp(), barX + barW + 8, hpY + 9);
 
-        // Indicador de golpe supremo disponível
-        if (player.isFuriaPronta()) {
-            g2.setColor(Color.YELLOW);
-            g2.setFont(new Font("SansSerif", Font.BOLD, 10));
-            g2.drawString("PRONTA! (Pressione L)", 260, 73);
-        }
+        // --------------------------------------------------------------------
+        // UI: BARRA DE FÚRIA EM FORMATO DE CHARUTO (CIGAR RAGE BAR)
+        // --------------------------------------------------------------------
+        int cigarX = barX;
+        int cigarY = panelY + 54;
+        int cigarTotalW = barW;
+        int cigarH = 16;
+
+        g2.setFont(new Font("SansSerif", Font.BOLD, 10));
+        g2.setColor(Color.LIGHT_GRAY);
+        g2.drawString("FÚRIA:", contentOffsetX, cigarY + 12);
+
+        drawCigarBar(g2, cigarX, cigarY, cigarTotalW, cigarH);
 
         // --------------------------------------------------------------------
         // Painel de Informações da Onda (Canto Superior Direito)
@@ -579,11 +624,9 @@ public class GamePanel extends JPanel implements Runnable {
         g2.setColor(Color.CYAN);
         g2.drawRoundRect(WIDTH - 180, 15, 165, 45, 15, 15);
         
-        // Número da onda
         g2.setFont(new Font("SansSerif", Font.BOLD, 13));
         g2.drawString("ONDA: " + currentWave + " / 3", WIDTH - 165, 33);
         
-        // Inimigos restantes vivos na tela
         g2.setFont(new Font("SansSerif", Font.PLAIN, 11));
         g2.setColor(Color.LIGHT_GRAY);
         g2.drawString("Inimigos: " + enemies.size(), WIDTH - 165, 48);
@@ -591,9 +634,108 @@ public class GamePanel extends JPanel implements Runnable {
         // --------------------------------------------------------------------
         // Rodapé com Instruções de Controles
         // --------------------------------------------------------------------
-        g2.setColor(new Color(255, 255, 255, 150));
+        g2.setColor(new Color(255, 255, 255, 170));
         g2.setFont(new Font("Monospaced", Font.PLAIN, 11));
-        g2.drawString("[WASD]: Mover | [J]: Soco | [K]: Chute | [L]: Fúria do Dragão | [R]: Reiniciar", 15, HEIGHT - 15);
+        g2.drawString("[WASD]: Mover | [ESPAÇO]: Cambalhota | [J]: Soco | [K]: Chute | [L]: Modo Fúria | [R]: Reiniciar", 15, HEIGHT - 15);
+    }
+
+    /**
+     * Desenha a Barra de Fúria em formato de Charuto.
+     * Enquanto queima (Modo Fúria ativo), a brasa consome o corpo do charuto da ponta
+     * até a base, deixando uma ponta incandescente e fumaça animada.
+     */
+    private void drawCigarBar(Graphics2D g2, int x, int y, int totalW, int h) {
+        double ratio = player.isFuriaActive() ? player.getFuriaPercent() : (player.getFuria() / 100.0);
+        int currentW = (int) Math.round(totalW * ratio);
+
+        // Fundo do slot do charuto (silhueta vazia / cinzas)
+        g2.setColor(new Color(30, 25, 25, 190));
+        g2.fillRoundRect(x, y, totalW, h, 6, 6);
+        g2.setColor(new Color(70, 50, 45));
+        g2.drawRoundRect(x, y, totalW, h, 6, 6);
+
+        if (currentW > 0) {
+            // Corpo de folhas de tabaco do charuto (Gradiente marrom rústico)
+            GradientPaint tobaccoGradient = new GradientPaint(
+                x, y, new Color(110, 60, 30),
+                x, y + h, new Color(75, 40, 20)
+            );
+            g2.setPaint(tobaccoGradient);
+            g2.fillRoundRect(x, y, currentW, h, 6, 6);
+
+            // Anel dourado do charuto (rótulo/cigar band) próximo à base
+            int bandX = x + 18;
+            int bandW = 10;
+            if (currentW > bandX - x + bandW) {
+                g2.setColor(new Color(220, 180, 50));
+                g2.fillRect(bandX, y, bandW, h);
+                g2.setColor(new Color(150, 20, 20));
+                g2.fillRect(bandX + 2, y + 2, bandW - 4, h - 4);
+            }
+
+            // Linhas de textura das folhas de tabaco enroladas
+            g2.setColor(new Color(60, 30, 15, 120));
+            for (int lx = x + 35; lx < x + currentW - 8; lx += 14) {
+                g2.drawLine(lx, y + 1, lx - 4, y + h - 2);
+            }
+
+            // Efeito visual quando a fúria está ativa ou cheia
+            int tipX = x + currentW;
+
+            if (player.isFuriaActive()) {
+                // Brasa incandescente queimando a ponta
+                int emberW = Math.min(10, currentW);
+                int emberX = tipX - emberW;
+                
+                // Ponta de cinzas cinza-escuras
+                g2.setColor(new Color(130, 125, 125));
+                g2.fillRect(emberX, y + 1, 3, h - 2);
+
+                // Brasa vermelha/laranja pulsante
+                long time = System.currentTimeMillis();
+                int pulse = (int) (Math.sin(time / 90.0) * 30);
+                g2.setColor(new Color(255, 80 + pulse, 20));
+                g2.fillRect(emberX + 3, y + 1, emberW - 3, h - 2);
+
+                // Centro da brasa superaquecido em amarelo
+                g2.setColor(new Color(255, 230, 100));
+                g2.fillRect(emberX + 5, y + 3, 3, h - 6);
+
+                // Fumaça animada subindo da ponta do charuto
+                g2.setColor(new Color(220, 220, 230, 90));
+                int smokeOffset = (int) ((time / 60) % 15);
+                g2.fillOval(tipX - 2 + (smokeOffset % 4), y - 6 - smokeOffset, 5 + (smokeOffset / 3), 4 + (smokeOffset / 3));
+
+                // Faíscas voando
+                g2.setColor(new Color(255, 200, 50, 180));
+                g2.fillRect(tipX + 2, y + 2 - (int)(time % 6), 2, 2);
+            } else if (player.isFuriaPronta()) {
+                // Charuto aceso e brilhando dourado pronto para fumar
+                g2.setColor(new Color(255, 215, 0));
+                g2.drawRoundRect(x, y, totalW, h, 6, 6);
+                
+                // Brasa pronta na ponta
+                g2.setColor(new Color(255, 100, 0));
+                g2.fillOval(x + totalW - 8, y + 2, 7, h - 4);
+                g2.setColor(new Color(255, 230, 120));
+                g2.fillOval(x + totalW - 6, y + 4, 3, h - 8);
+            }
+        }
+
+        // Borda final do charuto
+        g2.setColor(player.isFuriaActive() ? new Color(255, 80, 50) : (player.isFuriaPronta() ? Color.YELLOW : new Color(130, 95, 60)));
+        g2.drawRoundRect(x, y, totalW, h, 6, 6);
+
+        // Indicador de comando quando a fúria está pronta
+        if (player.isFuriaPronta() && !player.isFuriaActive()) {
+            g2.setColor(Color.YELLOW);
+            g2.setFont(new Font("SansSerif", Font.BOLD, 10));
+            g2.drawString("ACESO! [Pressione L]", x + totalW + 8, y + 12);
+        } else if (player.isFuriaActive()) {
+            g2.setColor(new Color(255, 100, 80));
+            g2.setFont(new Font("SansSerif", Font.BOLD, 10));
+            g2.drawString("FÚRIA ATIVA!", x + totalW + 8, y + 12);
+        }
     }
 
     /**
@@ -645,7 +787,16 @@ public class GamePanel extends JPanel implements Runnable {
         if (code == KeyEvent.VK_A || code == KeyEvent.VK_LEFT) keyLeft = true;
         if (code == KeyEvent.VK_D || code == KeyEvent.VK_RIGHT) keyRight = true;
 
-        // Comandos de Ataque
+        // Comandos de Ataque e Esquiva
+        if (code == KeyEvent.VK_SPACE) {
+            // Cambalhota nas 4 direções (W, S, A, D) ou frente
+            int rdx = 0, rdy = 0;
+            if (keyUp) rdy -= 1;
+            if (keyDown) rdy += 1;
+            if (keyLeft) rdx -= 1;
+            if (keyRight) rdx += 1;
+            player.startRoll(rdx, rdy);
+        }
         if (code == KeyEvent.VK_J) {
             player.attackSoco(); // Tecla J = Soco
         }

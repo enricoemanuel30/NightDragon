@@ -1,158 +1,426 @@
+package Entities;
+
+import main.engine.GamePanel;
+import java.awt.*;
+import java.awt.image.BufferedImage;
+import javax.imageio.ImageIO;
+import java.io.File;
+import java.io.InputStream;
+
+/**
+ * ============================================================================
+ * PROTAGONISTA: THANATOS COLT (PLAYER)
+ * ============================================================================
+ * Herda de Entity. Gerencia movimento na arena 2.5D, sistema de combate
+ * (Soco / Chute / Fúria do Dragão / Cambalhota nas 4 direções com Espaço)
+ * e a barra de Fúria.
+ * ============================================================================
+ */
+public class Player extends Entity {
+
+    // ------------------------------------------------------------------------
+    // ATRIBUTOS ESPECÍFICOS DO JOGADOR & FÚRIA (RAGE MODE)
+    // ------------------------------------------------------------------------
+    private int furia = 0;              // Barra de 0 a 100
+    private boolean isFuriaActive = false;
+    private int furiaTimer = 0;         // Timer restante do modo fúria
+    public static final int FURIA_MAX_DURATION = 360; // 6 segundos a 60 FPS
+    
+    // Estado de explosão inicial de ativação da Fúria (scream/aura burst)
+    private boolean isActivatingFuria = false;
+    private int activationTimer = 0;
+    private static final int ACTIVATION_DURATION = 30;
+
+    // ------------------------------------------------------------------------
+    // CAMBALHOTA / ROLL / ESQUIVA (ESPAÇO NAS 4 DIREÇÕES)
+    // ------------------------------------------------------------------------
+    private boolean isRolling = false;
+    private int rollTimer = 0;
+    private static final int ROLL_DURATION = 24; // 24 frames (~0.4s)
+    private int rollDx = 0;
+    private int rollDy = 0;
+    private static final int ROLL_SPEED = 7;     // Velocidade da cambalhota
+    private int rollCooldown = 0;
+
+    private int attackType = 1;         // 1 = Soco, 2 = Chute, 3 = Ataque Especial / Fúria
+    private boolean isMoving = false;
+
+    // ------------------------------------------------------------------------
+    // SISTEMA DE SPRITES E ANIMAÇÃO
+    // ------------------------------------------------------------------------
+    // Escala padrão calibrada para ~85-90px de altura
+    private static final double SCALE = 0.80;
+    private int animFrame = 0;
+    private int animTimer = 0;
+
+    public static class SpriteFrame {
+        public BufferedImage image;
+        public int anchorX, anchorY; // Ponto de ancoragem (centro dos pés na base)
+
+        public SpriteFrame(BufferedImage img, int ax, int ay) {
+            this.image = img;
+            this.anchorX = ax;
+            this.anchorY = ay;
+        }
+    }
+
+    // Frames Normais (base original do Thanatos)
+    private SpriteFrame[] idleFrames;
+    private SpriteFrame[] walkFrames;
+    private SpriteFrame[] punchFrames;
+    private SpriteFrame[] kickFrames;
+    private SpriteFrame[] gunFrames;
+    private SpriteFrame[] rollFrames;           // Nova animação de Cambalhota (12 frames)
+
+    // Frames do MODO FÚRIA (THANATOS-BRUTO - chamas vermelhas / aura)
+    private SpriteFrame[] rageActivationFrames; // Grito e explosão de aura (Row 0)
+    private SpriteFrame[] rageIdleFrames;       // Parado com aura flamejante (Row 0)
+    private SpriteFrame[] rageRunFrames;        // Corrida / investida com chamas (Row 2)
+    private SpriteFrame[] ragePunchFrames;      // Golpes com garras de sangue (Row 1)
+    private SpriteFrame[] rageKickFrames;       // Chutes com rastro de plasma vermelho (Row 1)
+    private SpriteFrame[] rageSpecialFrames;    // Erupção de chamas no solo (Row 2)
+    private BufferedImage ragePortrait;         // Retrato do Thanatos com charuto e olhos vermelhos
+
+    /**
+     * Construtor do Jogador Thanatos Colt.
+     * 
+     * @param x Posição X inicial
+     * @param y Posição Y inicial
+     */
+    public Player(int x, int y) {
+        // x, y, width, height, hp, speed
+        super(x, y, 42, 85, 100, 4);
+        loadAnimations();
+    }
+
+    /**
+     * Carrega as animações normais, de cambalhota e do Modo Fúria.
+     */
+    private void loadAnimations() {
+        try {
+            // --- FRAMES NORMAIS ---
+            idleFrames = new SpriteFrame[] {
+                loadFrame("clean_frames/idle_0.png", 42, 176),
+                loadFrame("clean_frames/idle_1.png", 40, 175),
+                loadFrame("clean_frames/idle_2.png", 34, 175),
+                loadFrame("clean_frames/idle_3.png", 39, 176),
+                loadFrame("clean_frames/idle_4.png", 39, 175),
+                loadFrame("clean_frames/idle_5.png", 26, 175)
+            };
+
+            walkFrames = new SpriteFrame[] {
+                loadFrame("clean_frames/walk_0.png", 51, 170),
+                loadFrame("clean_frames/walk_1.png", 70, 172),
+                loadFrame("clean_frames/walk_2.png", 54, 172),
+                loadFrame("clean_frames/walk_3.png", 42, 171),
+                loadFrame("clean_frames/walk_4.png", 48, 173)
+            };
+
+            punchFrames = new SpriteFrame[] {
+                loadFrame("clean_frames/punch_0.png", 46, 138),
+                loadFrame("clean_frames/punch_1.png", 60, 135),
+                loadFrame("clean_frames/punch_2.png", 53, 133),
+                loadFrame("clean_frames/punch_3.png", 47, 134),
+                loadFrame("clean_frames/punch_4.png", 45, 150)
+            };
+
+            kickFrames = new SpriteFrame[] {
+                loadFrame("clean_frames/kick_0.png", 30, 147),
+                loadFrame("clean_frames/kick_1.png", 31, 157),
+                loadFrame("clean_frames/kick_2.png", 34, 158),
+                loadFrame("clean_frames/kick_3.png", 54, 115)
+            };
+
+            gunFrames = new SpriteFrame[] {
+                loadFrame("clean_frames/gun_0.png", 26, 145),
+                loadFrame("clean_frames/gun_1.png", 40, 143),
+                loadFrame("clean_frames/gun_2.png", 36, 146),
+                loadFrame("clean_frames/gun_3.png", 38, 146),
+                loadFrame("clean_frames/gun_4.png", 30, 148)
+            };
+
+            // --- CAMBALHOTA / ROLL FRAMES (12 frames) ---
+            rollFrames = new SpriteFrame[] {
+                loadFrame("roll_frames/roll_0.png", 41, 156),
+                loadFrame("roll_frames/roll_1.png", 34, 120),
+                loadFrame("roll_frames/roll_2.png", 73, 135),
+                loadFrame("roll_frames/roll_3.png", 55, 140),
+                loadFrame("roll_frames/roll_4.png", 47, 155),
+                loadFrame("roll_frames/roll_5.png", 64, 140),
+                loadFrame("roll_frames/roll_6.png", 56, 152),
+                loadFrame("roll_frames/roll_7.png", 89, 119),
+                loadFrame("roll_frames/roll_8.png", 42, 117),
+                loadFrame("roll_frames/roll_9.png", 40, 135),
+                loadFrame("roll_frames/roll_10.png", 27, 154),
+                loadFrame("roll_frames/roll_11.png", 26, 158)
+            };
+
+            // --- FRAMES DO MODO FÚRIA (THANATOS-BRUTO) ---
+            rageActivationFrames = new SpriteFrame[] {
+                loadFrame("rage_frames/rage_act_0.png", 71, 227),
+                loadFrame("rage_frames/rage_act_1.png", 68, 225),
+                loadFrame("rage_frames/rage_act_2.png", 61, 231),
+                loadFrame("rage_frames/rage_act_3.png", 76, 253),
+                loadFrame("rage_frames/rage_act_4.png", 115, 188)
+            };
+
+            rageIdleFrames = new SpriteFrame[] {
+                loadFrame("rage_frames/rage_idle_0.png", 71, 227),
+                loadFrame("rage_frames/rage_idle_1.png", 68, 225),
+                loadFrame("rage_frames/rage_idle_2.png", 61, 231),
+                loadFrame("rage_frames/rage_idle_3.png", 68, 225)
+            };
+
+            rageRunFrames = new SpriteFrame[] {
+                loadFrame("rage_frames/rage_run_0.png", 65, 145),
+                loadFrame("rage_frames/rage_run_1.png", 75, 161)
+            };
+
+            ragePunchFrames = new SpriteFrame[] {
+                loadFrame("rage_frames/rage_punch_0.png", 86, 165),
+                loadFrame("rage_frames/rage_punch_1.png", 70, 155),
+                loadFrame("rage_frames/rage_punch_2.png", 50, 156)
+            };
+
+            rageKickFrames = new SpriteFrame[] {
+                loadFrame("rage_frames/rage_kick_0.png", 55, 143),
+                loadFrame("rage_frames/rage_kick_1.png", 65, 161),
+                loadFrame("rage_frames/rage_kick_2.png", 102, 168)
+            };
+
+            rageSpecialFrames = new SpriteFrame[] {
+                loadFrame("rage_frames/rage_special_0.png", 125, 183),
+                loadFrame("rage_frames/rage_special_1.png", 121, 193)
+            };
+
+            SpriteFrame portFrame = loadFrame("rage_frames/rage_portrait_0.png", 79, 103);
+            if (portFrame != null) {
+                ragePortrait = portFrame.image;
+            }
+
+            System.out.println("[Player] Animações completas (normal, roll, fúria) carregadas!");
+        } catch (Exception e) {
+            System.err.println("[Player] Erro carregando sprites: " + e.getMessage());
+        }
+    }
+
+    private SpriteFrame loadFrame(String relativePath, int anchorX, int anchorY) {
+        String[] paths = {
+            "res/sprites/player/" + relativePath,
+            "src/res/sprites/player/" + relativePath,
+            "bin/res/sprites/player/" + relativePath
+        };
+
+        BufferedImage img = null;
+        for (String p : paths) {
+            File f = new File(p);
+            if (f.exists()) {
+                try {
+                    img = ImageIO.read(f);
+                    break;
+                } catch (Exception ignored) {}
+            }
+        }
+
+        if (img == null) {
+            try {
+                InputStream is = getClass().getResourceAsStream("/res/sprites/player/" + relativePath);
+                if (is != null) {
+                    img = ImageIO.read(is);
+                }
+            } catch (Exception ignored) {}
+        }
+
+        if (img != null) {
+            return new SpriteFrame(img, anchorX, anchorY);
+        }
+        return null;
+    }
+
+    /**
+     * Inicia a Cambalhota / Esquiva (Tecla Espaço):
+     * Executa nas 4 direções (W, S, A, D) ou na direção que o personagem está olhando.
+     */
+    public void startRoll(int inputDx, int inputDy) {
+        if (isRolling || isActivatingFuria || rollCooldown > 0) return;
+
+        isRolling = true;
+        rollTimer = ROLL_DURATION;
+        rollCooldown = 15; // Cooldown leve após terminar
+        attacking = false;
+        hitboxActive = false;
+        animFrame = 0;
+        animTimer = 0;
+
+        // Se houver direção indicada, usa-a. Caso contrário, rola para frente
+        if (inputDx == 0 && inputDy == 0) {
+            rollDx = facingRight ? 1 : -1;
+            rollDy = 0;
+        } else {
+            rollDx = inputDx;
+            rollDy = inputDy;
+            if (rollDx > 0) facingRight = true;
+            else if (rollDx < 0) facingRight = false;
+        }
+    }
+
     /**
      * Processa a movimentação do jogador baseada nas teclas direcionais.
-     * Atualiza o estado de caminhada e restringe movimentos durante ataques normais.
-     * 
-     * @param dx Direção no eixo horizontal (-1 = esquerda, 0 = parado, +1 = direita)
-     * @param dy Direção no eixo vertical (-1 = sobe, 0 = parado, +1 = desce)
      */
     public void move(int dx, int dy) {
-        // Registra se houve intenção de movimento no frame atual
         this.isMoving = (dx != 0 || dy != 0);
 
-        // Se estiver desferindo um ataque normal, trava a movimentação para dar peso e impacto ao golpe
-        // (A menos que esteja no Modo Fúria, que permite deslizar golpeando)
+        if (isActivatingFuria) return;
+
+        // Durante a cambalhota, o deslocamento é governado pela física do roll
+        if (isRolling) {
+            x += rollDx * ROLL_SPEED;
+            y += rollDy * (int)(ROLL_SPEED * 0.7); // Eixo Y proporcional à perspectiva 2.5D
+            clampBounds();
+            return;
+        }
+
         if (attacking && !isFuriaActive) return;
 
-        // Deslocamento horizontal e atualização da orientação do olhar
+        int currentSpeed = isFuriaActive ? (int)(speed * 1.4) : speed;
+
         if (dx > 0) { 
-            x += speed; 
+            x += currentSpeed; 
             facingRight = true; 
         }
         if (dx < 0) { 
-            x -= speed; 
+            x -= currentSpeed; 
             facingRight = false; 
         }
 
-        // Deslocamento vertical (sensação de profundidade 2.5D na pista de caminhada)
         if (dy > 0) { 
-            y += speed; 
+            y += currentSpeed; 
         }
         if (dy < 0) { 
-            y -= speed; 
+            y -= currentSpeed; 
         }
 
-        // --------------------------------------------------------------------
-        // LIMITES DO CENÁRIO (CLAMPING DE COORDENADAS)
-        // --------------------------------------------------------------------
-        if (x < 30) x = 30;
-        if (x > GamePanel.WIDTH - 30) x = GamePanel.WIDTH - 30;
+        clampBounds();
+    }
+
+    private void clampBounds() {
+        if (x < 60) x = 60;
+        if (x > GamePanel.WIDTH - 60) x = GamePanel.WIDTH - 60;
         if (y < GamePanel.GROUND_MIN_Y + 10) y = GamePanel.GROUND_MIN_Y + 10;
         if (y > GamePanel.GROUND_MAX_Y) y = GamePanel.GROUND_MAX_Y;
     }
 
-    /**
-     * Executa o ataque de Soco (Tecla J):
-     * Possui um sistema de combo em 3 tempos:
-     * - 1º toque: Jab rápido (15 de dano)
-     * - 2º toque: Direto de punho cruzado (18 de dano)
-     * - 3º toque: Soco pesado de avanço (25 de dano)
-     */
+    /** Soco (Tecla J) */
     public void attackSoco() {
-        if (attacking) return; // Não interrompe o golpe enquanto o frame atual não concluir
-        
+        if (attacking || isActivatingFuria || isRolling) return;
         attacking = true;
         hitboxActive = true;
-        attackType = 1; // Soco
-
-        activePunchCombo = punchCombo;
-        if (punchCombo == 0) {
-            attackDamage = 15;
-            attackTimer = 14; // Animação rápida de 14 frames
-        } else if (punchCombo == 1) {
-            attackDamage = 18;
-            attackTimer = 14;
-        } else {
-            attackDamage = 25;
-            attackTimer = 18; // Golpe pesado de encerramento
-        }
-
-        // Avança na cadeia de combo e reseta a janela de tempo
-        punchCombo = (punchCombo + 1) % 3;
-        comboResetTimer = 40; // Dá ~0.66s para o jogador conectar o próximo golpe
+        attackType = 1;
+        attackDamage = isFuriaActive ? 35 : 20;
+        attackTimer = 16;
+        animFrame = 0;
+        animTimer = 0;
     }
 
-    /**
-     * Executa o ataque de Chute (Tecla K):
-     * Golpe com maior alcance e dano expressivo.
-     * Reproduz as 3 fases completas: câmara de joelho -> chute alto -> chute frontal.
-     */
+    /** Chute (Tecla K) */
     public void attackChute() {
-        if (attacking) return;
-        
+        if (attacking || isActivatingFuria || isRolling) return;
         attacking = true;
         hitboxActive = true;
-        attackType = 2; // Chute
-        attackDamage = 25;
-        attackTimer = 21; // 21 frames distribuídos harmonicamente entre as 3 poses
+        attackType = 2;
+        attackDamage = isFuriaActive ? 50 : 30;
+        attackTimer = 20;
+        animFrame = 0;
+        animTimer = 0;
     }
 
-    /**
-     * Ativa o golpe supremo: FÚRIA DO DRAGÃO (Tecla L):
-     * Consome 100% da barra de Fúria, concede invulnerabilidade temporária
-     * e desfere uma investida rasgante com corte de plasma de 60 de dano.
-     * 
-     * @return true se o especial foi ativado com sucesso; false se a barra não estava cheia.
-     */
+    /** Fúria do Dragão (Tecla L) */
     public boolean activateFuria() {
-        if (furia >= 100 && !isFuriaActive) {
-            furia = 0;             // Zera a barra de fúria
-            isFuriaActive = true;  // Concede estado de super-armadura / invulnerabilidade
-            furiaTimer = 180;      // Duração de 180 frames = 3 segundos
-            attacking = true;      // Entra em pose de ataque devastador
-            hitboxActive = true;   // Ativa área de impacto do especial
-            attackType = 3;        // Identifica como o golpe supremo
-            attackDamage = 60;     // Dano colossal
-            attackTimer = 25;      // Animação de investida cortante
+        if (furia >= 100 && !isFuriaActive && !isActivatingFuria && !isRolling) {
+            furia = 100;
+            isFuriaActive = true;
+            isActivatingFuria = true;
+            activationTimer = ACTIVATION_DURATION;
+            furiaTimer = FURIA_MAX_DURATION;
+            animFrame = 0;
+            animTimer = 0;
             return true;
         }
         return false;
     }
 
-    /**
-     * Adiciona pontos à barra de Fúria do Dragão (ganha ao acertar ou derrotar inimigos).
-     * O valor máximo é limitado em 100.
-     * 
-     * @param amount Quantidade de pontos a acrescentar
-     */
+    public void heal(int amount) {
+        this.hp += amount;
+        if (this.hp > this.maxHp) {
+            this.hp = this.maxHp;
+        }
+    }
+
     public void addFuria(int amount) {
+        if (isFuriaActive) return;
         this.furia += amount;
-        if (this.furia > 100) {
-            this.furia = 100;
-        }
+        if (this.furia > 100) this.furia = 100;
     }
 
-    /**
-     * Aplica dano ao jogador e ativa a animação de reação a golpe (Hurt).
-     */
-    @Override
-    public void takeDamage(int damage) {
-        if (isFuriaActive) return; // Totalmente invulnerável no Modo Fúria
-        super.takeDamage(damage);
-        if (alive) {
-            hurtTimer = 14; // Reação a golpe por ~14 frames
-        }
-    }
-
-    /**
-     * Retorna a área de impacto do golpe calculada dinamicamente conforme
-     * o alcance real do sprite (socos, chutes estendidos ou corte de fúria).
-     */
-    @Override
-    public Rectangle getAttackBounds() {
-        int attackWidth = 45; // Alcance do soco
-        if (attackType == 2) attackWidth = 58; // Chute tem alcance estendido
-        if (attackType == 3) attackWidth = 80; // Fúria do Dragão tem área de corte ampla
-
-        int attackX = facingRight ? x + (width / 2) - 5 : x - (width / 2) - attackWidth + 5;
-        return new Rectangle(attackX, y - height + 10, attackWidth, height - 10);
-    }
-
-    /**
-     * Atualização dos temporizadores internos e ciclos de animação a cada frame.
-     */
     @Override
     public void update() {
-        // Reduz o temporizador do golpe atual
+        if (rollCooldown > 0) rollCooldown--;
+
+        // 1. Atualização do Roll / Cambalhota
+        if (isRolling) {
+            rollTimer--;
+            animTimer++;
+            int speedPerFrame = ROLL_DURATION / (rollFrames != null ? rollFrames.length : 12);
+            if (speedPerFrame < 1) speedPerFrame = 1;
+
+            if (animTimer >= speedPerFrame) {
+                animTimer = 0;
+                if (rollFrames != null && animFrame < rollFrames.length - 1) {
+                    animFrame++;
+                }
+            }
+
+            if (rollTimer <= 0) {
+                isRolling = false;
+                animFrame = 0;
+                animTimer = 0;
+            }
+            return;
+        }
+
+        // 2. Processo de ativação da Fúria
+        if (isActivatingFuria) {
+            activationTimer--;
+            animTimer++;
+            int speedPerFrame = ACTIVATION_DURATION / (rageActivationFrames != null ? rageActivationFrames.length : 5);
+            if (speedPerFrame < 1) speedPerFrame = 1;
+
+            if (animTimer >= speedPerFrame) {
+                animTimer = 0;
+                if (rageActivationFrames != null && animFrame < rageActivationFrames.length - 1) {
+                    animFrame++;
+                }
+            }
+
+            if (activationTimer <= 0) {
+                isActivatingFuria = false;
+                animFrame = 0;
+                animTimer = 0;
+            }
+            return;
+        }
+
+        // 3. Consumo da Fúria
+        if (isFuriaActive) {
+            furiaTimer--;
+            furia = (int) Math.round((furiaTimer / (double) FURIA_MAX_DURATION) * 100);
+            if (furiaTimer <= 0) {
+                furia = 0;
+                isFuriaActive = false;
+            }
+        }
+
+        // 4. Ataques
         if (attacking) {
             attackTimer--;
             if (attackTimer <= 0) {
@@ -161,142 +429,111 @@
             }
         }
 
-        // Reduz o tempo de duração da Fúria do Dragão
-        if (isFuriaActive) {
-            furiaTimer--;
-            if (furiaTimer <= 0) {
-                isFuriaActive = false;
-            }
-        }
-
-        // Janela de combo de socos
-        if (comboResetTimer > 0) {
-            comboResetTimer--;
-            if (comboResetTimer <= 0) {
-                punchCombo = 0; // Se demorar para golpear de novo, volta para o primeiro soco (Jab)
-            }
-        }
-
-        // Temporizador de reação visual de dano
-        if (hurtTimer > 0) {
-            hurtTimer--;
-        }
-
-        // Atualização dos quadros de animação contínua (Idle e Walk)
-        if (!attacking && hurtTimer <= 0) {
-            if (isMoving && animWalk != null && animWalk.length > 0) {
-                walkTimer++;
-                if (walkTimer >= WALK_FRAME_DELAY) {
-                    walkTimer = 0;
-                    walkIndex = (walkIndex + 1) % animWalk.length;
-                }
-            } else if (animIdle != null && animIdle.length > 0) {
-                idleTimer++;
-                if (idleTimer >= IDLE_FRAME_DELAY) {
-                    idleTimer = 0;
-                    idleIndex = (idleIndex + 1) % animIdle.length;
+        // 5. Animações
+        animTimer++;
+        if (attacking) {
+            SpriteFrame[] cur = getCurrentAttackFrames();
+            int spd = 4;
+            if (animTimer >= spd) {
+                animTimer = 0;
+                if (cur != null && cur.length > 0) {
+                    animFrame = (animFrame + 1) % cur.length;
                 }
             }
-        }
-    }
-
-    /**
-     * Renderização gráfica do protagonista Thanatos Colt (Dragon of Night):
-     * Desenha a sombra no solo, a aura de Fúria e o sprite animado correspondente
-     * com espelhamento perfeito para esquerda/direita e ancoragem fixa nos pés.
-     * 
-     * @param g2 Contexto gráfico 2D
-     */
-    @Override
-    public void render(Graphics2D g2) {
-        // 1. Sombra do Personagem projetada no solo (pés firmes no chão 2.5D)
-        g2.setColor(new Color(0, 0, 0, 100));
-        g2.fillOval(x - 24, y - 8, 48, 15);
-
-        // 2. Aura da Fúria do Dragão (Brilho dourado vibrante ao redor do corpo)
-        if (isFuriaActive) {
-            g2.setColor(new Color(255, 200, 0, 100));
-            g2.fillOval(x - 32, y - 90, 64, 95);
-        }
-
-        // 3. Renderização do Sprite do Personagem
-        if (spritesLoaded) {
-            SpriteFrame frame = selectCurrentFrame();
-            if (frame != null) {
-                drawSpriteFrame(g2, frame, x, y, facingRight, SCALE);
-            }
-
-            // Efeito visual de plasma de corte durante o especial Fúria do Dragão
-            if (attacking && attackType == 3) {
-                g2.setColor(new Color(255, 120, 0, 200));
-                int arcX = facingRight ? x + 10 : x - 90;
-                g2.fillArc(arcX, y - 75, 80, 80, facingRight ? -50 : 130, 100);
+        } else if (isMoving) {
+            int spd = isFuriaActive ? 5 : 6;
+            if (animTimer >= spd) {
+                animTimer = 0;
+                SpriteFrame[] cur = isFuriaActive ? rageRunFrames : walkFrames;
+                if (cur != null && cur.length > 0) {
+                    animFrame = (animFrame + 1) % cur.length;
+                }
             }
         } else {
-            // Visual de fallback geométrico caso as imagens não estejam disponíveis
-            renderFallback(g2);
+            int spd = isFuriaActive ? 6 : 8;
+            if (animTimer >= spd) {
+                animTimer = 0;
+                SpriteFrame[] cur = isFuriaActive ? rageIdleFrames : idleFrames;
+                if (cur != null && cur.length > 0) {
+                    animFrame = (animFrame + 1) % cur.length;
+                }
+            }
         }
     }
 
-    /**
-     * Seleciona qual SpriteFrame deve ser exibido no instante exato da renderização,
-     * respeitando as prioridades: Morte > Dano > Ataque > Caminhada > Idle.
-     */
-    private SpriteFrame selectCurrentFrame() {
-        // Personagem derrotado
-        if (!alive) {
-            return animKnockdown;
+    private SpriteFrame[] getCurrentAttackFrames() {
+        if (isFuriaActive) {
+            switch (attackType) {
+                case 1: return ragePunchFrames;
+                case 2: return rageKickFrames;
+                case 3: return rageSpecialFrames;
+                default: return ragePunchFrames;
+            }
+        } else {
+            switch (attackType) {
+                case 1: return punchFrames;
+                case 2: return kickFrames;
+                case 3: return gunFrames;
+                default: return punchFrames;
+            }
+        }
+    }
+
+    private SpriteFrame[] getCurrentAnimationFrames() {
+        if (isRolling) {
+            return rollFrames;
+        } else if (isActivatingFuria) {
+            return rageActivationFrames;
+        } else if (attacking) {
+            return getCurrentAttackFrames();
+        } else if (isMoving) {
+            return isFuriaActive ? rageRunFrames : walkFrames;
+        } else {
+            return isFuriaActive ? rageIdleFrames : idleFrames;
+        }
+    }
+
+    @Override
+    public void render(Graphics2D g2) {
+        SpriteFrame[] frames = getCurrentAnimationFrames();
+        if (frames == null || frames.length == 0 || frames[0] == null) {
+            renderFallback(g2);
+            return;
         }
 
-        // Reação a golpe recebido
-        if (hurtTimer > 0 && animHurt != null && animHurt.length > 0) {
-            int hurtIdx = (hurtTimer > 7) ? 0 : 1;
-            return animHurt[hurtIdx % animHurt.length];
+        int frameIdx = animFrame % frames.length;
+        SpriteFrame frame = frames[frameIdx];
+        if (frame == null || frame.image == null) {
+            renderFallback(g2);
+            return;
         }
 
-        // Execução de Golpes
-        if (attacking) {
-            if (attackType == 1) { // Soco
-                if (activePunchCombo == 0) {
-                    return (attackTimer > 7) ? punch1Prep : punch1Strike;
-                } else if (activePunchCombo == 1) {
-                    return (attackTimer > 7) ? punch2Prep : punch2Strike;
-                } else {
-                    return punchHeavy;
-                }
-            } else if (attackType == 2) { // Chute
-                if (attackTimer > 14) {
-                    return kickChamber;
-                } else if (attackTimer > 7) {
-                    return kickHigh;
-                } else {
-                    return kickFront;
-                }
-            } else if (attackType == 3) { // Fúria do Dragão
-                return kickSlide;
+        // Sombra elíptica no chão (pés em x, y)
+        g2.setColor(new Color(0, 0, 0, 110));
+        g2.fillOval(x - 24, y - 8, 48, 16);
+
+        // Rastro de poeira / fumaça durante o roll
+        if (isRolling) {
+            g2.setColor(new Color(200, 170, 140, 80));
+            g2.fillOval(x - 20 - rollDx * 15, y - 6, 30, 12);
+        }
+
+        // Aura flamejante no modo fúria
+        if (isFuriaActive) {
+            g2.setColor(new Color(255, 30, 0, 70));
+            g2.fillOval(x - 38, y - 12, 76, 24);
+
+            if (isActivatingFuria) {
+                g2.setColor(new Color(255, 50, 0, 120));
+                int shockRadius = (ACTIVATION_DURATION - activationTimer) * 4;
+                g2.drawOval(x - shockRadius, y - 10 - shockRadius / 2, shockRadius * 2, shockRadius);
             }
         }
 
-        // Movimentação (Caminhada)
-        if (isMoving && animWalk != null && animWalk.length > 0) {
-            return animWalk[walkIndex % animWalk.length];
-        }
-
-        // Postura padrão de descanso / combate (Idle)
-        if (animIdle != null && animIdle.length > 0) {
-            return animIdle[idleIndex % animIdle.length];
-        }
-
-        return null;
+        drawSpriteFrame(g2, frame, x, y, facingRight, SCALE);
     }
 
-    /**
-     * Desenha o SpriteFrame aplicando a escala e o espelhamento horizontal (flip),
-     * garantindo que o ponto de ancoragem nos pés coincida perfeitamente com (screenX, screenY).
-     */
     private void drawSpriteFrame(Graphics2D g2, SpriteFrame frame, int screenX, int screenY, boolean right, double scale) {
-        if (frame == null || frame.image == null) return;
-
         int drawW = (int) Math.round(frame.image.getWidth() * scale);
         int drawH = (int) Math.round(frame.image.getHeight() * scale);
         int offsetX = (int) Math.round(frame.anchorX * scale);
@@ -305,22 +542,25 @@
         int drawY = screenY - offsetY;
 
         if (right) {
-            // Olhando para a direita: renderização padrão
             int drawX = screenX - offsetX;
             g2.drawImage(frame.image, drawX, drawY, drawW, drawH, null);
         } else {
-            // Olhando para a esquerda: espelha a imagem com largura negativa no eixo X
             int drawX = screenX - (drawW - offsetX);
             g2.drawImage(frame.image, drawX + drawW, drawY, -drawW, drawH, null);
         }
     }
 
-    /**
-     * Renderização procedural de emergência (caso a imagem não seja carregada).
-     */
     private void renderFallback(Graphics2D g2) {
         int drawX = x - width / 2;
         int drawY = y - height;
+
+        g2.setColor(new Color(0, 0, 0, 100));
+        g2.fillOval(x - 20, y - 8, 40, 14);
+
+        if (isFuriaActive) {
+            g2.setColor(new Color(255, 50, 0, 130));
+            g2.fillOval(x - 30, y - height - 10, 60, height + 15);
+        }
 
         g2.setColor(new Color(30, 35, 45));
         g2.fillRect(drawX, drawY + 15, width, height - 15);
@@ -333,29 +573,19 @@
         g2.fillRect(eyeX, drawY + 6, 4, 4);
 
         if (attacking) {
-            g2.setColor(isFuriaActive ? Color.YELLOW : Color.CYAN);
+            g2.setColor(isFuriaActive ? Color.RED : Color.CYAN);
             int armX = facingRight ? drawX + width : drawX - 25;
-            if (attackType == 1) {
-                g2.fillRect(armX, drawY + 22, 25, 10);
-            } else if (attackType == 2) {
-                g2.fillRect(armX, drawY + 40, 30, 12);
-            } else if (attackType == 3) {
-                g2.setColor(new Color(255, 100, 0, 200));
-                g2.fillArc(facingRight ? x : x - 70, drawY - 10, 70, height + 20, -60, 120);
-            }
+            g2.fillRect(armX, drawY + 22, 25, 10);
         }
     }
 
-    // ------------------------------------------------------------------------
-    // MÉTODOS DE CONSULTA (GETTERS ESPECÍFICOS)
-    // ------------------------------------------------------------------------
-
-    /** @return O valor acumulado da barra de fúria (0 a 100). */
     public int getFuria() { return furia; }
-
-    /** @return true se a barra de fúria atingiu 100% e está pronta para uso. */
     public boolean isFuriaPronta() { return furia >= 100; }
-
-    /** @return true se o jogador estiver imune a dano durante o modo Fúria. */
-    public boolean isInvulnerable() { return isFuriaActive; }
+    public boolean isFuriaActive() { return isFuriaActive; }
+    public boolean isActivatingFuria() { return isActivatingFuria; }
+    public boolean isRolling() { return isRolling; }
+    public double getFuriaPercent() { return (double) furiaTimer / FURIA_MAX_DURATION; }
+    public BufferedImage getRagePortrait() { return ragePortrait; }
+    // Durante a cambalhota ou modo fúria, o jogador fica invulnerável (i-frames na esquiva)
+    public boolean isInvulnerable() { return isFuriaActive || isRolling; }
 }
