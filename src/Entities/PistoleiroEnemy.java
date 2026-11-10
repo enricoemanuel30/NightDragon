@@ -65,7 +65,7 @@ public class PistoleiroEnemy extends Enemy {
             shootFrames = new SpriteFrame[] {
                 loadFrame("shoot_0.png", 23, 112),
                 loadFrame("shoot_1.png", 23, 112),
-                loadFrame("shoot_2.png", 23, 113)
+                loadFrame("crouch_shoot_2.png", 23, 113)
             };
 
             System.out.println("[PistoleiroEnemy] Sprites carregados com sucesso!");
@@ -187,7 +187,7 @@ public class PistoleiroEnemy extends Enemy {
         }
 
         int drawX = x - width / 2;
-        int drawY = y - height - 8;
+        int drawY = y - height - 80;
         drawEnemyHP(g2, drawX, drawY);
     }
 

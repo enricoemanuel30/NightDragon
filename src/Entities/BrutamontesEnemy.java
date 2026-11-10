@@ -47,7 +47,7 @@ public class BrutamontesEnemy extends Enemy {
 
     public BrutamontesEnemy(int x, int y) {
         // x, y, width, height, hp, speed
-        super(x, y, 42, 85, 140, 2);
+        super(x, y, 42, 85, 140, 1);
         this.attackDamage = 25;
         loadSprites();
     }
@@ -201,7 +201,7 @@ public class BrutamontesEnemy extends Enemy {
 
         // 3. Barra de HP
         int drawX = x - width / 2;
-        int drawY = y - height - 8;
+        int drawY = y - height - 140;
         drawEnemyHP(g2, drawX, drawY);
     }
 

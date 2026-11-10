@@ -24,7 +24,7 @@ public abstract class Entity {
     protected int x, y;          // Posição no plano cartesiano da tela (x horizontal, y vertical/profundidade)
     protected int width, height; // Largura e altura da caixa de colisão do corpo do personagem
     protected int hp, maxHp;     // Pontos de vida atuais e pontos de vida máximos
-    protected int speed;         // Velocidade de deslocamento por frame (em pixels)
+    protected float speed;         // Velocidade de deslocamento por frame (em pixels)
     protected boolean facingRight = true; // Direção para onde a entidade está olhando (true = direita, false = esquerda)
     protected boolean alive = true;       // Flag indicando se a entidade ainda está viva
 
@@ -48,7 +48,7 @@ public abstract class Entity {
      * @param hp     Pontos de vida iniciais (também define a vida máxima)
      * @param speed  Velocidade de movimento em pixels por atualização
      */
-    public Entity(int x, int y, int width, int height, int hp, int speed) {
+    public Entity(int x, int y, int width, int height, int hp, float speed) {
         this.x = x;
         this.y = y;
         this.width = width;

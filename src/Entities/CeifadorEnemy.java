@@ -45,7 +45,7 @@ public class CeifadorEnemy extends Enemy {
 
     public CeifadorEnemy(int x, int y) {
         // x, y, width, height, hp, speed
-        super(x, y, 40, 85, 75, 3);
+        super(x, y, 40, 85, 75, 1);
         this.attackDamage = 20;
         loadSprites();
     }
@@ -190,8 +190,8 @@ public class CeifadorEnemy extends Enemy {
         }
 
         // 3. Barra de Vida (HP)
-        int drawX = x - width / 2;
-        int drawY = y - height - 8;
+        int drawX = x - width + 10;
+        int drawY = y - height - 150;
         drawEnemyHP(g2, drawX, drawY);
     }
 

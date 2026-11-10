@@ -282,7 +282,7 @@ public class Player extends Entity {
 
         if (attacking && !isFuriaActive) return;
 
-        int currentSpeed = isFuriaActive ? (int)(speed * 1.4) : speed;
+        float currentSpeed = isFuriaActive ? (int)(speed * 1.4) : speed;
 
         if (dx > 0) { 
             x += currentSpeed; 

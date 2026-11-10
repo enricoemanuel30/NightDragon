@@ -34,7 +34,7 @@ public abstract class Enemy extends Entity {
      * @param hp     Pontos de vida
      * @param speed  Velocidade de locomoção
      */
-    public Enemy(int x, int y, int width, int height, int hp, int speed) {
+    public Enemy(int x, int y, int width, int height, int hp, float speed) {
         super(x, y, width, height, hp, speed);
     }
 

@@ -73,9 +73,11 @@ public class GamePanel extends JPanel implements Runnable {
     private boolean keyUp, keyDown, keyLeft, keyRight;
 
     // ------------------------------------------------------------------------
-    // TEXTURA DE FUNDO / CENÁRIO
+    // TEXTURA DE FUNDO / CENÁRIO E SPRITES DA UI
     // ------------------------------------------------------------------------
     private BufferedImage backgroundImage;
+    private BufferedImage[] cigarBuildFrames; // 8 frames do charuto acumulando fúria (linha 1)
+    private BufferedImage[] cigarBurnFrames;  // 8 frames do charuto queimando/consumindo fúria (linha 2)
 
     /**
      * Construtor do GamePanel.
@@ -93,6 +95,9 @@ public class GamePanel extends JPanel implements Runnable {
 
         // Carrega a textura do cenário caso exista arquivo de imagem dedicado
         loadBackground();
+
+        // Carrega os sprites do charuto para a UI
+        loadCigarSprites();
 
         // Inicializa todas as variáveis do jogo e inicia a primeira onda
         initGame();
@@ -441,6 +446,36 @@ public class GamePanel extends JPanel implements Runnable {
     }
 
     /**
+     * Carrega os sprites do charuto (build e burn) para a barra de fúria.
+     */
+    private void loadCigarSprites() {
+        cigarBuildFrames = new BufferedImage[8];
+        cigarBurnFrames = new BufferedImage[8];
+
+        for (int i = 0; i < 8; i++) {
+            cigarBuildFrames[i] = loadSingleImage("res/sprites/ui/cigar/cigar_build_" + i + ".png");
+            cigarBurnFrames[i] = loadSingleImage("res/sprites/ui/cigar/cigar_burn_" + i + ".png");
+        }
+        System.out.println("[GamePanel] Sprites da barra de Charuto carregados com sucesso!");
+    }
+
+    private BufferedImage loadSingleImage(String path) {
+        File f = new File(path);
+        if (f.exists()) {
+            try {
+                return ImageIO.read(f);
+            } catch (Exception ignored) {}
+        }
+        try {
+            InputStream is = getClass().getResourceAsStream("/" + path);
+            if (is != null) {
+                return ImageIO.read(is);
+            }
+        } catch (Exception ignored) {}
+        return null;
+    }
+
+    /**
      * Carrega a imagem do cenário se houver um arquivo presente em disco ou recursos.
      */
     private void loadBackground() {
@@ -640,101 +675,74 @@ public class GamePanel extends JPanel implements Runnable {
     }
 
     /**
-     * Desenha a Barra de Fúria em formato de Charuto.
-     * Enquanto queima (Modo Fúria ativo), a brasa consome o corpo do charuto da ponta
-     * até a base, deixando uma ponta incandescente e fumaça animada.
+     * Desenha a Barra de Fúria em formato de Charuto utilizando os sprites oficiais:
+     * - Quando fora da Fúria: evolui pelos frames de acendimento/fumaça conforme ganha fúria (0 a 100%).
+     * - Durante a Fúria: queima progressivamente do charuto em chamas até as cinzas conforme o tempo acaba.
      */
     private void drawCigarBar(Graphics2D g2, int x, int y, int totalW, int h) {
-        double ratio = player.isFuriaActive() ? player.getFuriaPercent() : (player.getFuria() / 100.0);
-        int currentW = (int) Math.round(totalW * ratio);
+        BufferedImage cigarImg = null;
 
-        // Fundo do slot do charuto (silhueta vazia / cinzas)
-        g2.setColor(new Color(30, 25, 25, 190));
-        g2.fillRoundRect(x, y, totalW, h, 6, 6);
-        g2.setColor(new Color(70, 50, 45));
-        g2.drawRoundRect(x, y, totalW, h, 6, 6);
+        if (player.isFuriaActive()) {
+            // MODO FÚRIA: O charuto queima gradualmente com o tempo restante
+            // percent vai de 1.0 (início) até 0.0 (fim da fúria)
+            double percent = player.getFuriaPercent();
+            // Inverte para os frames de queima (0 = cheio em chamas -> 7 = cinzas)
+            int frameIndex = (int) Math.round((1.0 - percent) * 7);
+            if (frameIndex < 0) frameIndex = 0;
+            if (frameIndex > 7) frameIndex = 7;
 
-        if (currentW > 0) {
-            // Corpo de folhas de tabaco do charuto (Gradiente marrom rústico)
-            GradientPaint tobaccoGradient = new GradientPaint(
-                x, y, new Color(110, 60, 30),
-                x, y + h, new Color(75, 40, 20)
-            );
-            g2.setPaint(tobaccoGradient);
-            g2.fillRoundRect(x, y, currentW, h, 6, 6);
-
-            // Anel dourado do charuto (rótulo/cigar band) próximo à base
-            int bandX = x + 18;
-            int bandW = 10;
-            if (currentW > bandX - x + bandW) {
-                g2.setColor(new Color(220, 180, 50));
-                g2.fillRect(bandX, y, bandW, h);
-                g2.setColor(new Color(150, 20, 20));
-                g2.fillRect(bandX + 2, y + 2, bandW - 4, h - 4);
+            if (cigarBurnFrames != null && cigarBurnFrames[frameIndex] != null) {
+                cigarImg = cigarBurnFrames[frameIndex];
             }
+        } else {
+            // FORA DA FÚRIA: O charuto se acende e acumula fumaça/fogo com a fúria (0 a 100)
+            int fury = player.getFuria();
+            int frameIndex = (int) Math.round((fury / 100.0) * 7);
+            if (frameIndex < 0) frameIndex = 0;
+            if (frameIndex > 7) frameIndex = 7;
 
-            // Linhas de textura das folhas de tabaco enroladas
-            g2.setColor(new Color(60, 30, 15, 120));
-            for (int lx = x + 35; lx < x + currentW - 8; lx += 14) {
-                g2.drawLine(lx, y + 1, lx - 4, y + h - 2);
-            }
-
-            // Efeito visual quando a fúria está ativa ou cheia
-            int tipX = x + currentW;
-
-            if (player.isFuriaActive()) {
-                // Brasa incandescente queimando a ponta
-                int emberW = Math.min(10, currentW);
-                int emberX = tipX - emberW;
-                
-                // Ponta de cinzas cinza-escuras
-                g2.setColor(new Color(130, 125, 125));
-                g2.fillRect(emberX, y + 1, 3, h - 2);
-
-                // Brasa vermelha/laranja pulsante
-                long time = System.currentTimeMillis();
-                int pulse = (int) (Math.sin(time / 90.0) * 30);
-                g2.setColor(new Color(255, 80 + pulse, 20));
-                g2.fillRect(emberX + 3, y + 1, emberW - 3, h - 2);
-
-                // Centro da brasa superaquecido em amarelo
-                g2.setColor(new Color(255, 230, 100));
-                g2.fillRect(emberX + 5, y + 3, 3, h - 6);
-
-                // Fumaça animada subindo da ponta do charuto
-                g2.setColor(new Color(220, 220, 230, 90));
-                int smokeOffset = (int) ((time / 60) % 15);
-                g2.fillOval(tipX - 2 + (smokeOffset % 4), y - 6 - smokeOffset, 5 + (smokeOffset / 3), 4 + (smokeOffset / 3));
-
-                // Faíscas voando
-                g2.setColor(new Color(255, 200, 50, 180));
-                g2.fillRect(tipX + 2, y + 2 - (int)(time % 6), 2, 2);
-            } else if (player.isFuriaPronta()) {
-                // Charuto aceso e brilhando dourado pronto para fumar
-                g2.setColor(new Color(255, 215, 0));
-                g2.drawRoundRect(x, y, totalW, h, 6, 6);
-                
-                // Brasa pronta na ponta
-                g2.setColor(new Color(255, 100, 0));
-                g2.fillOval(x + totalW - 8, y + 2, 7, h - 4);
-                g2.setColor(new Color(255, 230, 120));
-                g2.fillOval(x + totalW - 6, y + 4, 3, h - 8);
+            if (cigarBuildFrames != null && cigarBuildFrames[frameIndex] != null) {
+                cigarImg = cigarBuildFrames[frameIndex];
             }
         }
 
-        // Borda final do charuto
-        g2.setColor(player.isFuriaActive() ? new Color(255, 80, 50) : (player.isFuriaPronta() ? Color.YELLOW : new Color(130, 95, 60)));
-        g2.drawRoundRect(x, y, totalW, h, 6, 6);
+        if (cigarImg != null) {
+            // Renderiza o sprite do charuto com escala adequada
+            // Proporção do charuto: original tem ~120px de largura e ~40 a 130px de altura (com fumaça)
+            // A base do charuto fica alinhada na linha base de 'y + h'
+            double scale = 0.80;
+            int drawW = (int) Math.round(cigarImg.getWidth() * scale);
+            int drawH = (int) Math.round(cigarImg.getHeight() * scale);
 
-        // Indicador de comando quando a fúria está pronta
-        if (player.isFuriaPronta() && !player.isFuriaActive()) {
-            g2.setColor(Color.YELLOW);
-            g2.setFont(new Font("SansSerif", Font.BOLD, 10));
-            g2.drawString("ACESO! [Pressione L]", x + totalW + 8, y + 12);
-        } else if (player.isFuriaActive()) {
-            g2.setColor(new Color(255, 100, 80));
-            g2.setFont(new Font("SansSerif", Font.BOLD, 10));
-            g2.drawString("FÚRIA ATIVA!", x + totalW + 8, y + 12);
+            // Alinha a base do sprite para coincidir com a área da barra
+            int drawX = x;
+            int drawY = y + h - drawH + 10;
+
+            g2.drawImage(cigarImg, drawX, drawY, drawW, drawH, null);
+
+            // Indicador de comando quando a fúria está pronta ou ativa
+            int textX = drawX + drawW + 12;
+            if (player.isFuriaPronta() && !player.isFuriaActive()) {
+                g2.setColor(Color.YELLOW);
+                g2.setFont(new Font("SansSerif", Font.BOLD, 10));
+                g2.drawString("ACESO! [Pressione L]", textX, y + 12);
+            } else if (player.isFuriaActive()) {
+                g2.setColor(new Color(255, 80, 50));
+                g2.setFont(new Font("SansSerif", Font.BOLD, 10));
+                g2.drawString("QUEIMANDO!", textX, y + 12);
+            }
+        } else {
+            // Fallback caso a imagem não carregue
+            double ratio = player.isFuriaActive() ? player.getFuriaPercent() : (player.getFuria() / 100.0);
+            int currentW = (int) Math.round(totalW * ratio);
+            g2.setColor(new Color(30, 25, 25));
+            g2.fillRoundRect(x, y, totalW, h, 6, 6);
+            if (currentW > 0) {
+                g2.setColor(player.isFuriaActive() ? Color.RED : Color.ORANGE);
+                g2.fillRoundRect(x, y, currentW, h, 6, 6);
+            }
+            g2.setColor(Color.WHITE);
+            g2.drawRoundRect(x, y, totalW, h, 6, 6);
         }
     }
 
