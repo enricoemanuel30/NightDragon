@@ -35,5 +35,3 @@ O jogo contará inicialmente com três tipos de inimigos:
 - **Devil Cowboy Grunt:** combatente básico, especializado em ataques corpo a corpo.
 - **Devil Cowboy Gunner:** inimigo especializado em ataques à distância e armamentos.
 - **Devil Cowboy Brute:** combatente pesado, com modificações mecânicas que aumentam sua força e resistência.
-
-## ⚔️ Mecânicas de
