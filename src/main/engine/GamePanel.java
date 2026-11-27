@@ -58,6 +58,9 @@ public class GamePanel extends JPanel implements Runnable {
     private List<Enemy> enemies;                // Lista dinâmica contendo todos os inimigos vivos da onda atual
     private List<Projectile> projectiles;       // Lista contendo os projéteis disparados em voo
     private List<FloatingText> floatingTexts;   // Lista contendo os números de dano e notificações flutuantes
+    private List<WorldShape> worldShapes;       // Coleção de formas geométricas, obstáculos e moedas (Mini Projeto 01)
+    private int score = 0;                      // Pontuação do jogador inicializada em zero (Requisito do professor)
+    private int lives = 3;                      // Contador de vidas do jogador (Desafio Placar e Vidas)
 
     // ------------------------------------------------------------------------
     // MÁQUINA DE ESTADOS DO JOGO
@@ -127,41 +130,68 @@ public class GamePanel extends JPanel implements Runnable {
         enemies = new ArrayList<>();
         projectiles = new ArrayList<>();
         floatingTexts = new ArrayList<>();
+        worldShapes = new ArrayList<>(); // Inicializada com ArrayList conforme exigência do professor
+        score = 0;                       // Pontuação inicializada em zero
+        lives = 3;                       // Inicia com 3 vidas (Desafio de Vidas)
         gameOver = false;
         victory = false;
         currentWave = 1;
 
-        // Spawna os inimigos correspondentes à primeira onda
+        // Spawna os inimigos e formas geométricas correspondentes à primeira onda
         spawnWave(currentWave);
     }
 
     /**
-     * Spawna os inimigos de acordo com o número da onda atual.
-     * Cria uma progressão gradativa de dificuldade com diferentes combinações de inimigos.
+     * Spawna os inimigos e formas geométricas de acordo com o número da onda atual.
+     * Cria uma progressão gradativa de dificuldade com diferentes combinações de inimigos,
+     * moedas de ouro (círculos) e caixas/barris (retângulos/quadrados).
      * 
      * @param wave Número da onda (1, 2 ou 3)
      */
     private void spawnWave(int wave) {
         enemies.clear();     // Remove qualquer inimigo remanescente
         projectiles.clear(); // Remove projéteis da onda anterior
+        worldShapes.clear(); // Limpa as formas da onda anterior
         
-        // Onda 1: Apresentação básica de combate (1 Pistoleiro e 1 Ceifador no piso do Saloon)
+        // Onda 1: Apresentação básica de combate + Moedas e Caixotes
         if (wave == 1) {
             enemies.add(new PistoleiroEnemy(650, 350));
             enemies.add(new CeifadorEnemy(750, 420));
+
+            // Instanciação de formas geométricas (Círculos = Moedas; Retângulos = Caixotes)
+            worldShapes.add(WorldShape.createCoin(320, 360));
+            worldShapes.add(WorldShape.createCoin(460, 420));
+            worldShapes.add(WorldShape.createCoin(580, 340));
+            worldShapes.add(WorldShape.createCrate(400, 455));
         } 
-        // Onda 2: Aumento da pressão com introdução do Brutamontes Tanque
+        // Onda 2: Brutamontes + Moedas, Caixotes e Barris quadrados
         else if (wave == 2) {
             enemies.add(new PistoleiroEnemy(700, 340));
             enemies.add(new BrutamontesEnemy(750, 390));
             enemies.add(new CeifadorEnemy(800, 450));
+
+            worldShapes.add(WorldShape.createCoin(250, 340));
+            worldShapes.add(WorldShape.createCoin(380, 440));
+            worldShapes.add(WorldShape.createCoin(520, 360));
+            worldShapes.add(WorldShape.createCoin(640, 430));
+            worldShapes.add(WorldShape.createCrate(300, 455));
+            worldShapes.add(WorldShape.createBarrel(580, 350));
         } 
-        // Onda 3: Desafio Final / Boss Wave com 4 inimigos combinados
+        // Onda 3: Desafio Final / Boss Wave
         else if (wave >= 3) {
             enemies.add(new BrutamontesEnemy(650, 350));
             enemies.add(new PistoleiroEnemy(750, 410));
             enemies.add(new CeifadorEnemy(800, 360));
             enemies.add(new BrutamontesEnemy(850, 450));
+
+            worldShapes.add(WorldShape.createCoin(220, 350));
+            worldShapes.add(WorldShape.createCoin(340, 420));
+            worldShapes.add(WorldShape.createCoin(480, 330));
+            worldShapes.add(WorldShape.createCoin(600, 440));
+            worldShapes.add(WorldShape.createCoin(720, 350));
+            worldShapes.add(WorldShape.createCrate(280, 450));
+            worldShapes.add(WorldShape.createBarrel(420, 350));
+            worldShapes.add(WorldShape.createBarrel(680, 430));
         }
     }
 
@@ -251,6 +281,38 @@ public class GamePanel extends JPanel implements Runnable {
         player.update();
 
         // --------------------------------------------------------------------
+        // 2.5 Atualizar Formas Geométricas / Moedas e Colisão com o Jogador
+        // --------------------------------------------------------------------
+        // REGRA DO PROFESSOR: Remoção segura pelo índice de trás para frente (remove(i))
+        // para prevenir ConcurrentModificationException ao remover da própria coleção.
+        for (int i = worldShapes.size() - 1; i >= 0; i--) {
+            WorldShape shape = worldShapes.get(i);
+            shape.update();
+
+            // Detecção de colisão AABB entre o jogador e a forma geométrica
+            if (shape.isActive() && player.getBounds().intersects(shape.getBounds())) {
+                shape.setActive(false); // Previne múltiplas contabilizações da mesma colisão
+
+                // Execução de efeito sonoro em uma colisão válida
+                if (shape.getType() == WorldShape.ShapeType.CIRCLE_COIN) {
+                    SoundManager.getInstance().playCoin(); // Som de moeda coletada
+                    player.addFuria(5);
+                    floatingTexts.add(new FloatingText("+10 PTS (MOEDA)", shape.getX(), shape.getY() - 15, Color.YELLOW));
+                } else {
+                    SoundManager.getInstance().playHit(); // Som de impacto em objeto
+                    player.heal(5);
+                    floatingTexts.add(new FloatingText("+10 PTS", shape.getX(), shape.getY() - 15, Color.ORANGE));
+                }
+
+                // Acréscimo obrigatório de 10 pontos por colisão válida, conforme o exemplo do professor
+                score += shape.getPoints();
+
+                // Remoção segura do objeto atingido pelo índice
+                worldShapes.remove(i);
+            }
+        }
+
+        // --------------------------------------------------------------------
         // 3. Atualizar e Colidir Projéteis (Balas do Pistoleiro)
         // --------------------------------------------------------------------
         // Usa Iterator para permitir remoção segura de projéteis sem lançar ConcurrentModificationException
@@ -267,8 +329,9 @@ public class GamePanel extends JPanel implements Runnable {
 
             // Teste de Colisão AABB: Projétil colidindo com a área do corpo do Jogador
             if (p.getBounds().intersects(player.getBounds())) {
-                // Aplica dano ao jogador
+                // Aplica dano ao jogador e executa efeito sonoro
                 player.takeDamage(p.getDamage());
+                SoundManager.getInstance().playHit();
                 
                 // Exibe o número de dano vermelho subindo sobre o jogador
                 floatingTexts.add(new FloatingText("-" + p.getDamage(), player.getX(), player.getY() - 10, Color.RED));
@@ -277,9 +340,15 @@ public class GamePanel extends JPanel implements Runnable {
                 p.setActive(false);
                 projIt.remove();
 
-                // Verifica se Thanatos sucumbiu ao tiro
+                // Verifica sistema de vidas do jogador
                 if (player.getHp() <= 0) {
-                    gameOver = true;
+                    lives--;
+                    if (lives > 0) {
+                        player.heal(100);
+                        floatingTexts.add(new FloatingText("VIDA PERDIDA! RESTAM: " + lives, player.getX() - 20, player.getY() - 35, Color.RED));
+                    } else {
+                        gameOver = true;
+                    }
                 }
             }
         }
@@ -293,12 +362,16 @@ public class GamePanel extends JPanel implements Runnable {
 
             // Se o inimigo foi derrotado nesta iteração
             if (!enemy.isAlive()) {
-                // Recompensa o jogador com 25 pontos de Fúria do Dragão
+                // Recompensa o jogador com 25 pontos de Fúria do Dragão e pontuação de vitória
                 player.addFuria(25);
+                score += 50;
                 
                 // Exibe notificação de ganho de fúria
-                floatingTexts.add(new FloatingText("+25 FÚRIA", enemy.getX(), enemy.getY() - 20, Color.YELLOW));
+                floatingTexts.add(new FloatingText("+25 FÚRIA  +50 PTS", enemy.getX(), enemy.getY() - 20, Color.YELLOW));
                 
+                // Inimigo derrotado dropa uma moeda de ouro (círculo amarelo coletável)
+                worldShapes.add(WorldShape.createCoin(enemy.getX(), enemy.getY()));
+
                 // Remove o inimigo abatido da lista ativa
                 enemyIt.remove();
                 continue;
@@ -317,6 +390,7 @@ public class GamePanel extends JPanel implements Runnable {
                 // Se Thanatos estiver sob o efeito da Fúria do Dragão, ele fica invulnerável a golpes
                 if (!player.isInvulnerable()) {
                     player.takeDamage(enemy.getAttackDamage());
+                    SoundManager.getInstance().playHit();
                     
                     // Exibe número de dano recebido
                     floatingTexts.add(new FloatingText("-" + enemy.getAttackDamage(), player.getX(), player.getY() - 10, Color.RED));
@@ -324,9 +398,15 @@ public class GamePanel extends JPanel implements Runnable {
                     // Desativa a hitbox deste ataque para não causar dano duplicado no mesmo golpe
                     enemy.setHitboxActive(false);
 
-                    // Checa derrota
+                    // Checa vidas e derrota
                     if (player.getHp() <= 0) {
-                        gameOver = true;
+                        lives--;
+                        if (lives > 0) {
+                            player.heal(100);
+                            floatingTexts.add(new FloatingText("VIDA PERDIDA! RESTAM: " + lives, player.getX() - 20, player.getY() - 35, Color.RED));
+                        } else {
+                            gameOver = true;
+                        }
                     }
                 }
             }
@@ -339,6 +419,8 @@ public class GamePanel extends JPanel implements Runnable {
                 if (player.getAttackBounds().intersects(enemy.getBounds())) {
                     int dmg = player.getAttackDamage();
                     enemy.takeDamage(dmg);       // Aplica dano ao inimigo
+                    SoundManager.getInstance().playHit(); // Efeito sonoro do golpe
+                    score += 10;                 // Acréscimo de 10 pontos por colisão válida
                     
                     if (player.isFuriaActive()) {
                         // MECÂNICA DE LIFESTEAL: Cura HP a cada golpe bem-sucedido na Fúria
@@ -424,20 +506,25 @@ public class GamePanel extends JPanel implements Runnable {
             e.render(g2);
         }
 
-        // C. Desenha os Projéteis em voo
+        // C. Desenha as Formas Geométricas / Moedas (Círculos, Retângulos e Quadrados)
+        for (WorldShape ws : worldShapes) {
+            ws.render(g2);
+        }
+
+        // D. Desenha os Projéteis em voo
         for (Projectile p : projectiles) {
             p.render(g2);
         }
 
-        // D. Desenha os Números e Textos de Dano Flutuantes
+        // E. Desenha os Números e Textos de Dano Flutuantes
         for (FloatingText ft : floatingTexts) {
             ft.render(g2);
         }
 
-        // E. Desenha a Interface do Usuário (HUD: Barra de Vida, Fúria, Onda, etc.)
+        // F. Desenha a Interface do Usuário (HUD: Barra de Vida, Fúria, Onda, etc.)
         drawHUD(g2);
 
-        // F. Desenha Telas de Fim de Jogo quando aplicável
+        // G. Desenha Telas de Fim de Jogo quando aplicável
         if (gameOver) {
             drawOverlayMessage(g2, "GAME OVER", "Thanatos foi derrotado pelos Devil Cowboys!", Color.RED);
         } else if (victory) {
@@ -652,19 +739,31 @@ public class GamePanel extends JPanel implements Runnable {
         drawCigarBar(g2, cigarX, cigarY, cigarTotalW, cigarH);
 
         // --------------------------------------------------------------------
-        // Painel de Informações da Onda (Canto Superior Direito)
+        // Painel de Informações: Pontuação, Vidas e Onda (Canto Superior Direito)
         // --------------------------------------------------------------------
+        int infoPanelX = WIDTH - 200;
+        int infoPanelY = 15;
+        int infoPanelW = 185;
+        int infoPanelH = 75;
+
         g2.setColor(new Color(10, 10, 20, 220));
-        g2.fillRoundRect(WIDTH - 180, 15, 165, 45, 15, 15);
+        g2.fillRoundRect(infoPanelX, infoPanelY, infoPanelW, infoPanelH, 15, 15);
         g2.setColor(Color.CYAN);
-        g2.drawRoundRect(WIDTH - 180, 15, 165, 45, 15, 15);
+        g2.drawRoundRect(infoPanelX, infoPanelY, infoPanelW, infoPanelH, 15, 15);
         
-        g2.setFont(new Font("SansSerif", Font.BOLD, 13));
-        g2.drawString("ONDA: " + currentWave + " / 3", WIDTH - 165, 33);
+        // Exibição da pontuação via g2.drawString() exigida pelo professor
+        g2.setFont(new Font("SansSerif", Font.BOLD, 14));
+        g2.setColor(Color.YELLOW);
+        g2.drawString("PONTUAÇÃO: " + score, infoPanelX + 15, infoPanelY + 22);
+
+        // Desafio Placar e Vidas via g2.drawString()
+        g2.setFont(new Font("SansSerif", Font.BOLD, 12));
+        g2.setColor(Color.WHITE);
+        g2.drawString("VIDAS: " + lives + "  |  ONDA: " + currentWave + " / 3", infoPanelX + 15, infoPanelY + 44);
         
         g2.setFont(new Font("SansSerif", Font.PLAIN, 11));
         g2.setColor(Color.LIGHT_GRAY);
-        g2.drawString("Inimigos: " + enemies.size(), WIDTH - 165, 48);
+        g2.drawString("Inimigos: " + enemies.size() + " | Moedas: " + worldShapes.size(), infoPanelX + 15, infoPanelY + 63);
 
         // --------------------------------------------------------------------
         // Rodapé com Instruções de Controles
@@ -771,12 +870,19 @@ public class GamePanel extends JPanel implements Runnable {
         int subWidth = g2.getFontMetrics().stringWidth(subtitle);
         g2.drawString(subtitle, (WIDTH - subWidth) / 2, 260);
 
+        // Exibição da Pontuação Final alcançada (g2.drawString)
+        g2.setColor(new Color(255, 215, 0));
+        g2.setFont(new Font("SansSerif", Font.BOLD, 18));
+        String scoreText = "PONTUAÇÃO FINAL: " + score + " PONTOS";
+        int scoreWidth = g2.getFontMetrics().stringWidth(scoreText);
+        g2.drawString(scoreText, (WIDTH - scoreWidth) / 2, 295);
+
         // Instrução para reiniciar com a tecla R
         g2.setColor(Color.YELLOW);
         g2.setFont(new Font("Monospaced", Font.BOLD, 14));
         String restart = "Pressione [R] para jogar novamente";
         int restWidth = g2.getFontMetrics().stringWidth(restart);
-        g2.drawString(restart, (WIDTH - restWidth) / 2, 310);
+        g2.drawString(restart, (WIDTH - restWidth) / 2, 335);
     }
 
     // ------------------------------------------------------------------------
@@ -804,6 +910,7 @@ public class GamePanel extends JPanel implements Runnable {
             if (keyLeft) rdx -= 1;
             if (keyRight) rdx += 1;
             player.startRoll(rdx, rdy);
+            SoundManager.getInstance().playRoll();
         }
         if (code == KeyEvent.VK_J) {
             player.attackSoco(); // Tecla J = Soco
@@ -814,6 +921,7 @@ public class GamePanel extends JPanel implements Runnable {
         if (code == KeyEvent.VK_L) {
             // Tecla L = Ativa a Fúria do Dragão se a barra estiver cheia
             if (player.activateFuria()) {
+                SoundManager.getInstance().playRage();
                 floatingTexts.add(new FloatingText("FÚRIA DO DRAGÃO!", player.getX() - 30, player.getY() - 30, Color.YELLOW));
             }
         }
